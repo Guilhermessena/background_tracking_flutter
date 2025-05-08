@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
 void main() {
@@ -77,19 +78,23 @@ class _MyHomePageState extends State<MyHomePage> {
           locationSettings:
               Platform.isAndroid
                   ? AndroidSettings(
+                    accuracy: LocationAccuracy.bestForNavigation,
+                    distanceFilter: 10,
+                    forceLocationManager: true,
                     foregroundNotificationConfig:
                         const ForegroundNotificationConfig(
-                          notificationTitle: 'Location fetching in background',
+                          notificationTitle: 'Rastreamento em andamento',
                           notificationText:
-                              'Your current location is listened in background',
+                              'Seu dispositivo está sendo rastreado',
                           enableWakeLock: true,
                         ),
                   )
                   : AppleSettings(
-                    accuracy: LocationAccuracy.high,
+                    accuracy: LocationAccuracy.bestForNavigation,
                     activityType: ActivityType.fitness,
-                    showBackgroundLocationIndicator: false,
-                    pauseLocationUpdatesAutomatically: true,
+                    distanceFilter: 10,
+                    showBackgroundLocationIndicator: true,
+                    pauseLocationUpdatesAutomatically: false,
                   ),
         ).listen((event) async {
           currentPosition = event;
@@ -99,9 +104,32 @@ class _MyHomePageState extends State<MyHomePage> {
             'Posição: $currentPosition | Data e hora: $formattedDate',
             name: 'currentPosition',
           );
+          await _sendLocationToAPI(currentPosition!, formattedDate);
         });
       },
     );
+  }
+
+  Future<void> _sendLocationToAPI(Position position, String dateTime) async {
+    try {
+      final response = await http.post(
+        Uri.parse('http://10.24.4.240:8484/api/Location/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: '''
+        {
+          "latitude": ${position.latitude},
+          "longitude": ${position.longitude},
+          "userHash": "app_teste"
+        }
+        ''',
+      );
+      log('Resposta da API: ${response.body}');
+      if (response.statusCode != 200) {
+        log('Falha ao enviar localização: ${response.statusCode}');
+      }
+    } catch (e) {
+      log('Erro ao enviar localização: $e');
+    }
   }
 
   @override
