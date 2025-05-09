@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 
 void main() {
   runApp(const MyApp());
@@ -74,43 +73,39 @@ class _MyHomePageState extends State<MyHomePage> {
   void startListeningLocation() async {
     locationPermission(
       inSuccess: () async {
-        subscription = Geolocator.getPositionStream(
-          locationSettings:
-              Platform.isAndroid
-                  ? AndroidSettings(
-                    accuracy: LocationAccuracy.bestForNavigation,
-                    distanceFilter: 10,
-                    forceLocationManager: true,
-                    foregroundNotificationConfig:
-                        const ForegroundNotificationConfig(
-                          notificationTitle: 'Rastreamento em andamento',
-                          notificationText:
-                              'Seu dispositivo está sendo rastreado',
-                          enableWakeLock: true,
-                        ),
-                  )
-                  : AppleSettings(
-                    accuracy: LocationAccuracy.bestForNavigation,
-                    activityType: ActivityType.fitness,
-                    distanceFilter: 10,
-                    showBackgroundLocationIndicator: true,
-                    pauseLocationUpdatesAutomatically: false,
-                  ),
-        ).listen((event) async {
-          currentPosition = event;
+        subscription = Stream.periodic(const Duration(seconds: 1)).listen((
+          _,
+        ) async {
           final now = DateTime.now().toUtc().add(const Duration(hours: -3));
-          final formattedDate = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
-          log(
-            'Posição: $currentPosition | Data e hora: $formattedDate',
-            name: 'currentPosition',
-          );
-          await _sendLocationToAPI(currentPosition!, formattedDate);
+          if (now.hour == 17 && now.minute == 47 && now.second == 0) {
+            final position = await Geolocator.getCurrentPosition(
+              locationSettings: LocationSettings(
+                accuracy: LocationAccuracy.bestForNavigation,
+              ),
+            );
+            currentPosition = position;
+            await _sendLocationToAPI(currentPosition!);
+          }
         });
+        if (Platform.isAndroid) {
+          Geolocator.getPositionStream(
+            locationSettings: AndroidSettings(
+              accuracy: LocationAccuracy.bestForNavigation,
+              distanceFilter: 10,
+              forceLocationManager: true,
+              foregroundNotificationConfig: const ForegroundNotificationConfig(
+                notificationTitle: 'Rastreamento em andamento',
+                notificationText: 'Seu dispositivo está sendo rastreado',
+                enableWakeLock: true,
+              ),
+            ),
+          );
+        }
       },
     );
   }
 
-  Future<void> _sendLocationToAPI(Position position, String dateTime) async {
+  Future<void> _sendLocationToAPI(Position position) async {
     try {
       final response = await http.post(
         Uri.parse('http://10.24.4.240:8484/api/Location/register'),
@@ -126,6 +121,8 @@ class _MyHomePageState extends State<MyHomePage> {
       log('Resposta da API: ${response.body}');
       if (response.statusCode != 200) {
         log('Falha ao enviar localização: ${response.statusCode}');
+      } else {
+        log('Localização enviada com sucesso às 12h.');
       }
     } catch (e) {
       log('Erro ao enviar localização: $e');
